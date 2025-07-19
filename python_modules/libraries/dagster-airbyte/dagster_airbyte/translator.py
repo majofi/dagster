@@ -76,7 +76,7 @@ class AirbyteConnection:
             name=connection_details["name"],
             stream_prefix=connection_details.get("prefix"),
             streams={
-                stream_details["stream"]["name"]: AirbyteStream.from_stream_details(
+                stream_details["name"]: AirbyteStream.from_stream_details(
                     stream_details=stream_details
                 )
                 for stream_details in connection_details.get("syncCatalog", {}).get("streams", [])
@@ -125,9 +125,9 @@ class AirbyteStream:
         stream_details: Mapping[str, Any],
     ) -> "AirbyteStream":
         return cls(
-            name=stream_details["stream"]["name"],
-            selected=stream_details["config"].get("selected", False),
-            json_schema=stream_details["stream"].get("jsonSchema", {}),
+            name=stream_details["name"],
+            selected=True,
+            json_schema={},
         )
 
 
