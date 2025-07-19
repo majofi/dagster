@@ -292,6 +292,7 @@ class BaseAirbyteResource(ConfigurableResource):
         "Use `AirbyteCloudWorkspace` with `build_airbyte_assets_definitions` instead."
     )
 )
+
 class AirbyteCloudResource(BaseAirbyteResource):
     """This resource allows users to programmatically interface with the Airbyte Cloud API to launch
     syncs and monitor their progress.
@@ -414,6 +415,24 @@ class AirbyteCloudResource(BaseAirbyteResource):
             )
         )
 
+
+class AirbyteOSSResource(AirbyteCloudResource):
+    
+    host: str = Field(description="The Airbyte server address.")
+    port: str = Field(description="Port used for the Airbyte server.")
+    username: Optional[str] = Field(default=None, description="Username if using basic auth.")
+    password: Optional[str] = Field(default=None, description="Password if using basic auth.")
+    use_https: bool = Field(
+        default=False, description="Whether to use HTTPS to connect to the Airbyte server."
+    )
+
+    @property
+    def api_base_url(self) -> str:
+        return (
+            ("https://" if self.use_https else "http://")
+            + (f"{self.host}:{self.port}" if self.port else self.host)
+            + "/api/public/v1"
+        )
 
 class AirbyteResource(BaseAirbyteResource):
     """This resource allows users to programatically interface with the Airbyte REST API to launch
@@ -1117,6 +1136,40 @@ class AirbyteCloudClient(DagsterModel):
 
         return AirbyteOutput(job_details=poll_job_details, connection_details=connection_details)
 
+class AirbyteOSSClient(AirbyteCloudClient):
+    host: str = Field(description="The Airbyte server address.")
+    port: str = Field(description="Port used for the Airbyte server.")
+    username: Optional[str] = Field(default=None, description="Username if using basic auth.")
+    password: Optional[str] = Field(default=None, description="Password if using basic auth.")
+    use_https: bool = Field(
+        default=False, description="Whether to use HTTPS to connect to the Airbyte server."
+    )
+
+    @property
+    def rest_api_base_url(self) -> str:
+        return (
+            ("https://" if self.use_https else "http://")
+            + (f"{self.host}:{self.port}" if self.port else self.host)
+            + "/api/public/v1"
+        )
+
+
+    def get_connection_details(self, connection_id) -> Mapping[str, Any]:
+        """Fetches details about a given connection from the Airbyte Configuration API.
+        The Airbyte Configuration API is an internal and may change in the future.
+        """
+        # Using the Airbyte Configuration API to get the connection details, including streams and their configs.
+        # https://airbyte-public-api-docs.s3.us-east-2.amazonaws.com/rapidoc-api-docs.html#post-/v1/connections/get
+        # https://github.com/airbytehq/airbyte-platform/blob/v1.0.0/airbyte-api/server-api/src/main/openapi/config.yaml
+        return self._make_request(
+            method="GET",
+            endpoint=f"connections/{connection_id}",
+            base_url=self.rest_api_base_url,
+        )
+
+
+
+
 
 @beta
 class AirbyteCloudWorkspace(ConfigurableResource):
@@ -1335,6 +1388,29 @@ class AirbyteCloudWorkspace(ConfigurableResource):
                 initialized = initialized_workspace
                 setattr(self, "_initialized", initialized)
                 yield initialized
+
+class AirbyteOSSWorkspace(AirbyteCloudWorkspace):
+    host: str = Field(description="The Airbyte server address.")
+    port: str = Field(description="Port used for the Airbyte server.")
+    username: Optional[str] = Field(default=None, description="Username if using basic auth.")
+    password: Optional[str] = Field(default=None, description="Password if using basic auth.")
+    use_https: bool = Field(
+        default=False, description="Whether to use HTTPS to connect to the Airbyte server.")
+
+    def get_client(self) -> AirbyteOSSClient:
+        return AirbyteOSSClient(
+            workspace_id=self.workspace_id,
+            client_id=self.client_id,
+            client_secret=self.client_secret,
+            request_max_retries=self.request_max_retries,
+            request_retry_delay=self.request_retry_delay,
+            request_timeout=self.request_timeout,
+            host=self.host,
+            port=self.port,
+            username=self.username,
+            password=self.password,
+            use_https=self.use_https,
+        )
 
 
 @beta
